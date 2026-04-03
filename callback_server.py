@@ -1,74 +1,50 @@
 """
-Callback server to handle Azure Communication Services call events.
+Callback server to handle Twilio call events.
 
-Azure sends webhook events during a call (connected, disconnected, DTMF tones, etc.).
-This server handles those events and can play audio, recognize speech, or hang up.
+When Twilio connects a call, it requests TwiML instructions from your server.
+This server tells Twilio what to say, play, or do during the call.
 
 Usage:
     python callback_server.py
     (Then expose port 5000 via ngrok: ngrok http 5000)
 """
 
-import os
-
-from dotenv import load_dotenv
-from flask import Flask, request, jsonify
-from azure.communication.callautomation import (
-    CallAutomationClient,
-    CallAutomationEventParser,
-    TextSource,
-)
-
-load_dotenv()
+from flask import Flask, request
+from twilio.twiml.voice_response import VoiceResponse
 
 app = Flask(__name__)
 
-connection_string = os.getenv("ACS_CONNECTION_STRING")
-client = CallAutomationClient.from_connection_string(connection_string)
 
+@app.route("/voice", methods=["POST"])
+def voice():
+    """Called when the target answers. Return TwiML instructions."""
+    print(f"Call answered! From: {request.form.get('From')} To: {request.form.get('To')}")
 
-@app.route("/api/callbacks", methods=["POST"])
-def callbacks():
-    """Handle call automation events from Azure."""
-    for event_dict in request.json:
-        event = CallAutomationEventParser.parse(event_dict)
-        call_connection_id = event.call_connection_id
-
-        event_type = type(event).__name__
-        print(f"Event received: {event_type} (connection: {call_connection_id})")
-
-        if event_type == "CallConnected":
-            handle_call_connected(call_connection_id)
-        elif event_type == "PlayCompleted":
-            handle_play_completed(call_connection_id)
-        elif event_type == "CallDisconnected":
-            print("Call ended.")
-
-    return jsonify({"status": "ok"}), 200
-
-
-def handle_call_connected(call_connection_id: str):
-    """Called when the target answers. Play a greeting message."""
-    print("Call connected! Playing greeting...")
-
-    call_connection = client.get_call_connection(call_connection_id)
-    greeting = TextSource(
-        text="Hello! This is an automated call from the voicebot. How can I help you today?",
-        voice_name="en-US-JennyNeural",
+    response = VoiceResponse()
+    response.say(
+        "Hello! This is an automated call from the voicebot. How can I help you today?",
+        voice="Polly.Joanna",
+        language="en-US",
     )
-    call_connection.play_media_to_all(greeting)
+    response.pause(length=2)
+    response.say("Goodbye!", voice="Polly.Joanna")
+    response.hangup()
+
+    return str(response), 200, {"Content-Type": "text/xml"}
 
 
-def handle_play_completed(call_connection_id: str):
-    """Called when audio playback finishes."""
-    print("Playback completed. Hanging up.")
-    call_connection = client.get_call_connection(call_connection_id)
-    call_connection.hang_up(is_for_everyone=True)
+@app.route("/status", methods=["POST"])
+def status():
+    """Receive call status updates."""
+    call_sid = request.form.get("CallSid")
+    call_status = request.form.get("CallStatus")
+    print(f"Call {call_sid}: {call_status}")
+    return "", 204
 
 
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"status": "healthy"}), 200
+    return {"status": "healthy"}, 200
 
 
 if __name__ == "__main__":

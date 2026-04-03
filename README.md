@@ -1,45 +1,26 @@
 # Voicebot Testing
 
-Make outbound phone calls using Azure Communication Services (ACS).
-
-## Prerequisites
-
-1. **Azure Account** - [Create one free](https://azure.microsoft.com/free/)
-2. **Azure Communication Services resource** - Create one in the Azure Portal
-3. **Phone number** - Purchase a phone number in your ACS resource
-4. **ngrok** - For local development callback URL
+Make outbound phone calls using Twilio.
 
 ## Setup
 
-### 1. Create Azure Communication Services Resource
-
-1. Go to [Azure Portal](https://portal.azure.com)
-2. Search for "Communication Services" and create a new resource
-3. Once created, go to **Keys** → copy the **Connection string**
-
-### 2. Get a Phone Number
-
-1. In your ACS resource, go to **Phone numbers**
-2. Click **Get a number** → select a toll-free or local number
-3. Note the number in E.164 format (e.g., `+18001234567`)
-
-### 3. Configure Environment
+### 1. Configure Environment
 
 ```bash
 cp .env.example .env
-# Edit .env with your values
+# Edit .env with your Twilio credentials
 ```
 
-### 4. Install Dependencies
+### 2. Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 5. Start the Callback Server
+### 3. Start the Callback Server
 
 ```bash
-# Terminal 1: Start ngrok
+# Terminal 1: Start ngrok to get a public URL
 ngrok http 5000
 
 # Copy the ngrok HTTPS URL into your .env as CALLBACK_URI
@@ -48,7 +29,7 @@ ngrok http 5000
 python callback_server.py
 ```
 
-### 6. Make a Call
+### 4. Make a Call
 
 ```bash
 python make_call.py --target +14155551234
@@ -56,14 +37,17 @@ python make_call.py --target +14155551234
 
 ## How It Works
 
-1. `make_call.py` initiates an outbound call via Azure
-2. Azure connects the call and sends webhook events to your callback server
-3. `callback_server.py` handles events:
-   - **CallConnected** → plays a text-to-speech greeting
-   - **PlayCompleted** → hangs up the call
+1. `make_call.py` initiates an outbound call via Twilio API
+2. When the target answers, Twilio fetches TwiML instructions from `/voice`
+3. `callback_server.py` returns instructions to:
+   - Say a greeting using text-to-speech
+   - Pause, then say goodbye and hang up
+4. Call status updates are logged via `/status` webhook
 
-## Cost
+## Files
 
-- Azure Communication Services has [pay-as-you-go pricing](https://azure.microsoft.com/pricing/details/communication-services/)
-- Phone number: ~$2/month (US toll-free)
-- Outbound PSTN calls: ~$0.013/min (US)
+| File | Purpose |
+|---|---|
+| `make_call.py` | Initiate outbound phone calls |
+| `callback_server.py` | Handle call events via TwiML |
+| `.env.example` | Template for credentials |

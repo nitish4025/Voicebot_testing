@@ -1,5 +1,5 @@
 """
-Voicebot - Make outbound calls using Azure Communication Services.
+Voicebot - Make outbound calls using Twilio.
 
 Usage:
     python make_call.py --target +1XXXXXXXXXX
@@ -11,52 +11,52 @@ import os
 import sys
 
 from dotenv import load_dotenv
-from azure.communication.callautomation import (
-    CallAutomationClient,
-    PhoneNumberIdentifier,
-)
+from twilio.rest import Client
 
 load_dotenv()
 
 
 def get_config():
-    connection_string = os.getenv("ACS_CONNECTION_STRING")
-    phone_number = os.getenv("ACS_PHONE_NUMBER")
+    account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+    auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+    phone_number = os.getenv("TWILIO_PHONE_NUMBER")
     callback_uri = os.getenv("CALLBACK_URI")
 
-    if not connection_string:
-        sys.exit("Error: ACS_CONNECTION_STRING not set. See .env.example")
+    if not account_sid:
+        sys.exit("Error: TWILIO_ACCOUNT_SID not set. See .env.example")
+    if not auth_token:
+        sys.exit("Error: TWILIO_AUTH_TOKEN not set. See .env.example")
     if not phone_number:
-        sys.exit("Error: ACS_PHONE_NUMBER not set. See .env.example")
+        sys.exit("Error: TWILIO_PHONE_NUMBER not set. See .env.example")
     if not callback_uri:
         sys.exit("Error: CALLBACK_URI not set. See .env.example")
 
-    return connection_string, phone_number, callback_uri
+    return account_sid, auth_token, phone_number, callback_uri
 
 
 def make_call(target_number: str):
-    connection_string, source_number, callback_uri = get_config()
+    account_sid, auth_token, source_number, callback_uri = get_config()
 
-    client = CallAutomationClient.from_connection_string(connection_string)
-
-    target = PhoneNumberIdentifier(target_number)
-    source = PhoneNumberIdentifier(source_number)
+    client = Client(account_sid, auth_token)
 
     print(f"Calling {target_number} from {source_number}...")
 
-    call_result = client.create_call(
-        target_participant=target,
-        source_caller_id_number=source,
-        callback_url=f"{callback_uri}/api/callbacks",
+    call = client.calls.create(
+        to=target_number,
+        from_=source_number,
+        url=f"{callback_uri}/voice",
+        status_callback=f"{callback_uri}/status",
+        status_callback_event=["initiated", "ringing", "answered", "completed"],
     )
 
     print(f"Call initiated successfully!")
-    print(f"Call connection ID: {call_result.call_connection_id}")
-    return call_result
+    print(f"Call SID: {call.sid}")
+    print(f"Status: {call.status}")
+    return call
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Make an outbound call via Azure Communication Services")
+    parser = argparse.ArgumentParser(description="Make an outbound call via Twilio")
     parser.add_argument(
         "--target",
         type=str,
